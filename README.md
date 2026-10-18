@@ -1,88 +1,214 @@
 # FRPEWS – Flood Risk Prediction & Early Warning System
 
-Full-stack thesis prototype for **vulnerable Nigerian communities** (Makurdi, Lokoja, Onitsha).
+FRPEWS is a full-stack web application for monitoring and predicting flood risk in vulnerable Nigerian communities. The application combines a React dashboard, a FastAPI backend, live weather data, machine-learning predictions, and SMS alert management for three study areas:
 
-| Component | Implementation |
-|-----------|----------------|
-| Models | **Random Forest** (200 trees) + **LSTM** (2× layers) → **ensemble 0.5/0.5** |
-| Accuracy (Ch. 4) | RF 87.3% · LSTM 88.6% · Ensemble **89.4%** |
-| Frontend | React 18 + Vite |
-| Backend | FastAPI · SQLAlchemy · SQLite |
-| Data feeds | **Open-Meteo** (live, no key) · NiMet API path documented |
-| Alerts | Twilio SMS (demo mode without credentials) |
+- **Makurdi, Benue** — Benue River
+- **Lokoja, Kogi** — Niger–Benue Confluence
+- **Onitsha, Anambra** — River Niger
 
----
+It is designed as an academic and educational final-year project prototype.
+
+## What the application does
+
+### Flood risk dashboard
+
+The Dashboard page provides a station-by-station view of the latest prediction for Makurdi, Lokoja, and Onitsha. Each station card can display:
+
+- Current risk classification: **Low**, **Moderate**, **High**, or **Extreme**
+- Risk trend: increasing, decreasing, or stable
+- Last prediction time
+- Probability distribution across the four risk classes
+- High- and Extreme-risk warnings when applicable
+
+### Interactive flood prediction
+
+The Predict page allows users to run an ensemble flood-risk prediction by entering or loading:
+
+- Daily rainfall in millimetres
+- Current river level in metres
+- Three-day antecedent rainfall
+- Seven-day antecedent rainfall
+- Change in river level
+- Month of the year
+- Monitoring station
+
+Users can either enter values manually, choose safe/moderate/high/extreme presets, or load the latest available station data from the live feed. The prediction result includes the ensemble risk level, recommended action, class probabilities, individual Random Forest and LSTM outputs, and whether an SMS alert was triggered.
+
+### Alert management
+
+The Alerts page supports two workflows:
+
+1. **Send a manual SMS alert** to a phone number using a station-specific risk template or a custom message.
+2. **Subscribe a phone number** to receive alerts when a selected station reaches a configured minimum risk level.
+
+Twilio credentials enable live SMS delivery. When Twilio credentials are not configured, the application runs in demo mode and logs the message instead of sending it.
+
+### Project and model information
+
+The About page presents the technology stack, thesis-aligned performance figures, data-source information, and local setup instructions. It also explains the Open-Meteo demo feed and the documented NiMet integration path.
+
+## Technology stack
+
+| Layer | Technology |
+|-------|------------|
+| Frontend | React 18, Vite, React Router, Axios, Recharts, Lucide React |
+| Backend | FastAPI, Uvicorn, Pydantic Settings |
+| Database | SQLAlchemy async ORM, SQLite, aiosqlite |
+| Machine learning | scikit-learn Random Forest and TensorFlow/Keras LSTM |
+| Weather data | Open-Meteo live feed; NiMet integration path documented |
+| Notifications | Twilio SMS with demo mode when credentials are absent |
+| Authentication | JWT-based backend authentication with a seeded admin account |
+
+## Prediction model
+
+The backend combines two model outputs into a 50/50 ensemble:
+
+- **Random Forest:** 200 trees
+- **LSTM:** two stacked recurrent layers with dropout and a four-class softmax output
+- **Ensemble:** Random Forest probability × 0.5 + LSTM probability × 0.5
+
+The four prediction classes are **Low**, **Moderate**, **High**, and **Extreme**. The thesis-aligned performance figures exposed by the application are:
+
+| Model | Accuracy |
+|-------|----------|
+| Random Forest | 87.3% |
+| LSTM | 88.6% |
+| Ensemble | **89.4%** |
+
+The model metrics also document the expected advance-warning period and the leading features used in the thesis analysis. On the first backend startup, the required model artifacts are trained or prepared and stored under `backend/models/`.
+
+> **Data note:** Open-Meteo supplies live meteorological features. River-level values currently use the documented rainfall-based proxy until direct NIHSA gauge data is connected. The NiMet endpoint and integration requirements are documented by the backend API.
 
 ## Quick start
 
-### Backend
+### Prerequisites
+
+- Python 3.10 or newer
+- Node.js and npm
+- Optional: Twilio account credentials for live SMS delivery
+
+### 1. Start the backend
+
+From the repository root:
+
 ```bash
 cd backend
 python -m venv venv
-source venv/bin/activate          # Windows: venv\Scripts\activate
-pip install -r requirements.txt   # includes tensorflow
-cp .env.example .env              # optional Twilio / NIMET keys
+
+# macOS/Linux
+source venv/bin/activate
+
+# Windows PowerShell
+# .\\venv\\Scripts\\Activate.ps1
+
+pip install -r requirements.txt
+cp .env.example .env              # Optional: configure Twilio values
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
-- Swagger UI: **http://localhost:8000/docs**
-- ReDoc: **http://localhost:8000/redoc**
-- Metrics: **http://localhost:8000/api/predictions/metrics**
-- Live feeds: **http://localhost:8000/api/feeds/live**
 
-First startup trains RF + LSTM (may take 1–3 minutes on CPU). Models are saved under `backend/models/`.
+Backend URLs:
 
-### Frontend
+- API: http://localhost:8000
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
+- Health check: http://localhost:8000/health
+
+The first startup creates the SQLite database, seeds the three monitoring stations and admin account, and prepares the machine-learning models. Model preparation may take several minutes on a CPU-only machine.
+
+### 2. Start the frontend
+
+In a second terminal:
+
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
-Open **http://localhost:5173**
 
----
+Open the application at:
 
-## API overview (also in /docs)
-
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/predictions/predict` | Ensemble prediction (RF + LSTM) |
-| GET | `/api/predictions/metrics` | Chapter 4 performance figures |
-| GET | `/api/feeds/live` | Live Open-Meteo features for all study areas |
-| GET | `/api/feeds/live/{Makurdi\|Lokoja\|Onitsha}` | Single-station live features |
-| GET | `/api/feeds/nimet-info` | How NiMet would be wired with an API key |
-| GET | `/api/dashboard/summary` | Station risk cards |
-| POST | `/api/alerts/send` | Manual SMS |
-| POST | `/api/alerts/subscribe` | Subscribe phone to High/Extreme alerts |
-
----
-
-## Defense talking points
-
-1. **Ensemble** matches thesis §4.4.3 (weights 0.5/0.5; ensemble outperforms either model alone).
-2. **LSTM** architecture: 30-day lookback → 2 stacked LSTM (128→64) + Dropout + Dense → 4-class softmax (§3.3.2.2).
-3. **Feature importance**: river level > 3-day rain > daily rain > 7-day rain (§4.4.1).
-4. **Live feeds**: Open-Meteo supplies rainfall/temp/humidity for the three coordinates; river level is a documented rainfall proxy until NIHSA gauges are connected.
-5. **NiMet**: Official API exists (`api.nimet.gov.ng`) and requires a key; `/api/feeds/nimet-info` documents the integration path.
-6. **SMS last-mile**: Twilio templates for High/Extreme; demo mode logs messages when credentials are absent.
-
----
-
-## Project layout
+```text
+http://localhost:5173
 ```
-frpews/
+
+The frontend expects the FastAPI backend to be available on port `8000`.
+
+## Environment configuration
+
+Backend settings are loaded from `backend/.env`. The main optional notification settings are:
+
+```env
+TWILIO_ACCOUNT_SID=
+TWILIO_AUTH_TOKEN=
+TWILIO_PHONE_NUMBER=
+```
+
+If these values are empty, SMS requests are recorded in demo mode. Change the default secret and admin credentials before using the application outside a local academic demonstration.
+
+The default seeded admin account is:
+
+```text
+Email:    admin@frpews.local
+Password: Admin123!
+```
+
+## API overview
+
+Interactive API documentation is available at `/docs` when the backend is running.
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| `GET` | `/health` | Check backend health |
+| `POST` | `/api/auth/login` | Authenticate a user |
+| `GET` | `/api/stations` | List monitoring stations |
+| `GET` | `/api/dashboard/summary` | Retrieve station cards and latest risk data |
+| `POST` | `/api/predictions/predict` | Run an RF + LSTM ensemble prediction |
+| `GET` | `/api/predictions/metrics` | Retrieve thesis-aligned model metrics |
+| `GET` | `/api/feeds/live` | Retrieve live features for all study areas |
+| `GET` | `/api/feeds/live/{station}` | Retrieve live features for one station |
+| `GET` | `/api/feeds/nimet-info` | View NiMet integration information |
+| `GET` | `/api/alerts` | List recent alert records |
+| `POST` | `/api/alerts/send` | Send or log a manual SMS alert |
+| `POST` | `/api/alerts/subscribe` | Subscribe a phone number to risk alerts |
+
+## Project structure
+
+```text
+early_warning_system/
 ├── backend/
 │   ├── app/
 │   │   ├── main.py
-│   │   ├── core/  models/  routers/  schemas/  services/
-│   │   └── services/ml_service.py      # RF + LSTM + ensemble
-│   │   └── services/data_feed_service.py  # Open-Meteo / NiMet notes
-│   ├── models/          # created at first run
-│   └── requirements.txt
+│   │   ├── core/                  # Settings, database, security
+│   │   ├── models/                # SQLAlchemy database models
+│   │   ├── routers/               # Auth, stations, predictions, alerts, dashboard, feeds
+│   │   ├── schemas/               # Request and response schemas
+│   │   └── services/
+│   │       ├── ml_service.py      # Random Forest, LSTM, and ensemble logic
+│   │       └── data_feed_service.py # Open-Meteo and NiMet feed integration
+│   ├── models/                    # Generated model artifacts
+│   ├── requirements.txt
+│   └── .env.example
 ├── frontend/
-│   └── src/pages/       # Dashboard, Predict, Alerts, About
+│   ├── src/
+│   │   ├── pages/
+│   │   │   ├── Dashboard.jsx      # Station risk overview
+│   │   │   ├── Predict.jsx        # Interactive prediction form
+│   │   │   ├── Alerts.jsx         # SMS and subscription management
+│   │   │   └── About.jsx           # Project, metrics, and setup information
+│   │   └── App.jsx                # Navigation and application routes
+│   └── package.json
 └── README.md
 ```
 
-Default admin: `admin@frpews.local` / `Admin123!`
+## Thesis and defense highlights
 
-Academic / educational use – Final Year Project prototype.
+- The ensemble combines Random Forest and LSTM predictions with equal weights.
+- The application exposes the individual model outputs as well as the combined result.
+- Flood risk is classified into four operational levels: Low, Moderate, High, and Extreme.
+- Live weather data can be loaded directly into the prediction form.
+- High- and Extreme-risk predictions can trigger SMS notifications for subscribers.
+- Open-Meteo is used as the accessible demonstration feed, while NiMet and direct river-gauge integration are documented extension points.
+
+## Academic disclaimer
+
+FRPEWS is an academic/educational prototype for flood-risk research and demonstration. Its predictions should not be treated as an official emergency-warning service without validation against authoritative hydrological data, operational monitoring infrastructure, and the relevant Nigerian emergency-management authorities.
